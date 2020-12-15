@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>Cell Game</title>
+        <link href="main.css" rel="stylesheet">
+    </head>
+    <body>
+        <canvas id="mainCanvas"></canvas>
+        <button id="stepButton" onclick="step();">Step</button>
+        <script>
+            var imageLoaded = false;
+        </script>
+        <img id="cells" src="cells.png" onload="imageLoaded = true;" style="display: none; visibility: hidden;">
+        <script src="main.js"></script>
+    </body>
+</html>
