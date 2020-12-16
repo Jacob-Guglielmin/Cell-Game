@@ -2,26 +2,46 @@
 
 let canvas = document.getElementById("mainCanvas"),
     renderer = canvas.getContext("2d"),
+    draggingCanvas = document.getElementById("draggingCanvas"),
+    draggingRenderer = draggingCanvas.getContext("2d"),
     backgroundCanvas = document.getElementById("backgroundCanvas"),
     backgroundRenderer = backgroundCanvas.getContext("2d"),
 
     cellSize = 30,
 
     placedCells = [],
+    targetsRemaining = 1,
 
     mapWidth,
     mapHeight,
 
     newCellId = 0,
 
-    //Cell types
-    CELLS = {
-        EMPTY: 0,
-        EMPTY_PLACEABLE: 20,
-        IMMOBILE: 40,
-        PASSIVE: 60,
-        PUSHER: 80
+    mouseDown = false,
+    cellHeld = null,
+    dragOffset = { x: 0, y: 0 },
+
+    level = {
+        width: 10,
+        height: 6,
+        placeable: {
+            x1: 1,
+            y1: 1,
+            x2: 4,
+            y2: 4
+        }
     };
+
+//Cell types
+const CELLS = {
+    NO_CELL: -1,
+    EMPTY: 0,
+    EMPTY_PLACEABLE: 20,
+    IMMOBILE: 40,
+    PASSIVE: 60,
+    PUSHER: 80,
+    TARGET: 100
+};
 
 /**
  * Fix for the javascript modulo operator
@@ -34,99 +54,110 @@ function mod(n, m) {
  * Starts the game
  */
 function init() {
-    //Resizes the canvas
-    canvas.width = 300;
-    canvas.height = 300;
+    //Sets the size of the map in cells
+    mapWidth = level.width;
+    mapHeight = level.height;
+
+    //Resizes the canvas to fit the map
+    canvas.width = mapWidth * cellSize;
+    canvas.height = mapHeight * cellSize;
     backgroundCanvas.width = canvas.width;
     backgroundCanvas.height = canvas.height;
+    draggingCanvas.width = canvas.width;
+    draggingCanvas.height = canvas.height;
 
-    //Sets the size of the map in cells
-    mapWidth = canvas.width / cellSize;
-    mapHeight = canvas.height / cellSize;
-
-    drawBackground();
+    drawBackground(level.placeable.x1, level.placeable.y1, level.placeable.x2, level.placeable.y2);
 
     createMap(true);
 }
 
 function step() {
     for (let cell of placedCells) {
-        switch (cell.type) {
-            case CELLS.PUSHER:
-                let pushLoopIndex = 1,
-                    toPush = [cell.id],
-                    moreCells = true;
-                while (true) {
-                    let nextPush = undefined;
-                    switch (mod(cell.rotation, 4)) {
-                        case 0:
-                            if (cell.y - pushLoopIndex >= 0) {
-                                nextPush = getCell(cell.x, cell.y - pushLoopIndex);
-                            }
-                            break;
+        if (cell) {
+            switch (cell.type) {
+                case CELLS.PUSHER:
+                    let pushLoopIndex = 1,
+                        toPush = [cell.id],
+                        moreCells = true;
+                    while (true) {
+                        let nextPush = undefined;
+                        switch (mod(cell.rotation, 4)) {
+                            case 0:
+                                if (cell.y - pushLoopIndex >= 0) {
+                                    nextPush = getCell(cell.x, cell.y - pushLoopIndex);
+                                }
+                                break;
 
-                        case 1:
-                            if (cell.x + pushLoopIndex < mapWidth) {
-                                nextPush = getCell(cell.x + pushLoopIndex, cell.y);
-                            }
-                            break;
+                            case 1:
+                                if (cell.x + pushLoopIndex < mapWidth) {
+                                    nextPush = getCell(cell.x + pushLoopIndex, cell.y);
+                                }
+                                break;
 
-                        case 2:
-                            if (cell.y + pushLoopIndex < mapHeight) {
-                                nextPush = getCell(cell.x, cell.y + pushLoopIndex);
-                            }
-                            break;
+                            case 2:
+                                if (cell.y + pushLoopIndex < mapHeight) {
+                                    nextPush = getCell(cell.x, cell.y + pushLoopIndex);
+                                }
+                                break;
 
-                        case 3:
-                            if (cell.x - pushLoopIndex >= 0) {
-                                nextPush = getCell(cell.x - pushLoopIndex, cell.y);
-                            }
+                            case 3:
+                                if (cell.x - pushLoopIndex >= 0) {
+                                    nextPush = getCell(cell.x - pushLoopIndex, cell.y);
+                                }
+                                break;
+                        }
+                        if (nextPush && placedCells[nextPush].type == CELLS.IMMOBILE) {
                             break;
-                    }
-                    if (nextPush && placedCells[nextPush].type == CELLS.IMMOBILE) {
-                        break;
-                    } else {
-                        if (nextPush == undefined) {
-                            for (let cellPushing of toPush) {
-                                switch (mod(cell.rotation, 4)) {
-                                    case 0:
-                                        placedCells[cellPushing].y--;
-                                        break;
-                                    case 1:
-                                        placedCells[cellPushing].x++;
-                                        break;
-                                    case 2:
-                                        placedCells[cellPushing].y++;
-                                        break;
-                                    case 3:
-                                        placedCells[cellPushing].x--;
-                                        break;
+                        } else {
+                            if (nextPush == undefined || placedCells[nextPush] == null || placedCells[nextPush].type == CELLS.TARGET) {
+                                if (nextPush && placedCells[nextPush].type == CELLS.TARGET) {
+                                    placedCells[nextPush] = null;
+                                    targetsRemaining--;
+                                }
+                                for (let cellPushing of toPush) {
+                                    switch (mod(cell.rotation, 4)) {
+                                        case 0:
+                                            placedCells[cellPushing].y--;
+                                            break;
+                                        case 1:
+                                            placedCells[cellPushing].x++;
+                                            break;
+                                        case 2:
+                                            placedCells[cellPushing].y++;
+                                            break;
+                                        case 3:
+                                            placedCells[cellPushing].x--;
+                                            break;
+                                    }
+                                }
+                                break;
+                            } else if (placedCells[nextPush].type == CELLS.PUSHER) {
+                                if (placedCells[nextPush].rotation == mod(cell.rotation + 2, 4)) {
+                                    break;
+                                } else if (placedCells[nextPush].rotation == cell.rotation) {
+                                    moreCells = false;
+                                } else {
+                                    toPush.push(nextPush);
+                                }
+                            } else {
+                                if (moreCells) {
+                                    toPush.push(nextPush);
                                 }
                             }
-                            break;
-                        } else if (placedCells[nextPush].type == CELLS.PUSHER) {
-                            if (placedCells[nextPush].rotation == mod(cell.rotation + 2, 4)) {
-                                break;
-                            } else if (placedCells[nextPush].rotation == cell.rotation) {
-                                moreCells = false;
-                            } else {
-                                toPush.push(nextPush);
-                            }
-                        } else {
-                            if (moreCells) {
-                                toPush.push(nextPush);
-                            }
                         }
+                        pushLoopIndex++;
                     }
-                    pushLoopIndex++;
-                }
-                break;
+                    break;
 
-            default:
-                break;
+                default:
+                    break;
+            }
         }
     }
     drawMap();
+    if (targetsRemaining == 0) {
+        alert("You win!");
+    }
 }
 
 /**
@@ -143,12 +174,8 @@ function createMap(border) {
         }
     }
 
-    placedCells.push({ x: 2, y: 4, type: CELLS.PUSHER, rotation: 1, id: placedCells.length });
-    placedCells.push({ x: 3, y: 4, type: CELLS.PUSHER, rotation: 1, id: placedCells.length });
-    placedCells.push({ x: 4, y: 4, type: CELLS.PASSIVE, rotation: 0, id: placedCells.length });
-    placedCells.push({ x: 4, y: 3, type: CELLS.PUSHER, rotation: 2, id: placedCells.length });
-    placedCells.push({ x: 4, y: 5, type: CELLS.PUSHER, rotation: 0, id: placedCells.length });
-    placedCells.push({ x: 5, y: 4, type: CELLS.PASSIVE, rotation: 0, id: placedCells.length });
+    placedCells.push({ x: 7, y: 2, type: CELLS.TARGET, rotation: 0, id: placedCells.length });
+    placedCells.push({ x: 3, y: 3, type: CELLS.PUSHER, rotation: 1, id: placedCells.length });
 
     drawMap();
 }
@@ -157,37 +184,46 @@ function createMap(border) {
  * Draws the cells onto the canvas
  */
 function drawMap() {
-    clearMap();
+    clearCanvas(renderer);
     for (let cell of placedCells) {
-        drawMapCell(cell.x, cell.y, cell.type, cell.rotation, renderer);
+        if (cell) {
+            drawMapCell(cell.x, cell.y, cell.type, cell.rotation, renderer);
+        }
     }
 }
 
 /**
  * Draws a cell on the map
  * 
- * @param x The zero-based map coordinate for the cell
- * @param y The zero-based map coordinate for the cell
+ * @param x The zero-based coordinate for the cell
+ * @param y The zero-based coordinate for the cell
  * @param spritePosition The y position on the spritesheet of the cell
  * @param rotation The rotation id of the cell
  * @param canvasRenderer The renderer to use
+ * 
  */
 function drawMapCell(x, y, spritePosition, rotation = 0, canvasRenderer) {
-    if (rotation == 0) {
-        canvasRenderer.drawImage(document.getElementById("cells"), 0, spritePosition, 20, 20, Math.floor(x * cellSize), Math.floor(y * cellSize), cellSize, cellSize);
-    } else {
-        canvasRenderer.setTransform(1, 0, 0, 1, (x + 1) * cellSize - Math.floor(cellSize / 2), (y + 1) * cellSize - Math.floor(cellSize / 2));
-        canvasRenderer.rotate(getRotation(rotation));
-        canvasRenderer.drawImage(document.getElementById("cells"), 0, spritePosition, 20, 20, -Math.floor(cellSize / 2), -Math.floor(cellSize / 2), cellSize, cellSize);
-        canvasRenderer.setTransform(1, 0, 0, 1, 0, 0);
+    if (spritePosition != CELLS.NO_CELL) {
+        if (canvasRenderer != draggingRenderer) {
+            x *= cellSize;
+            y *= cellSize;
+        }
+        if (rotation == 0) {
+            canvasRenderer.drawImage(document.getElementById("cells"), 0, spritePosition, 20, 20, x, y, cellSize, cellSize);
+        } else {
+            canvasRenderer.setTransform(1, 0, 0, 1, x + Math.floor(cellSize / 2), y + Math.floor(cellSize / 2));
+            canvasRenderer.rotate(getRotation(rotation));
+            canvasRenderer.drawImage(document.getElementById("cells"), 0, spritePosition, 20, 20, -Math.floor(cellSize / 2), -Math.floor(cellSize / 2), cellSize, cellSize);
+            canvasRenderer.setTransform(1, 0, 0, 1, 0, 0);
+        }
     }
 }
 
 /**
  * Clears the whole map
  */
-function clearMap() {
-    renderer.clearRect(0, 0, canvas.width, canvas.height);
+function clearCanvas(canvasRenderer) {
+    canvasRenderer.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 /**
@@ -205,7 +241,7 @@ function getRotation(rotation) {
  */
 function getCell(x, y) {
     for (let cell in placedCells) {
-        if (placedCells[cell].x == x && placedCells[cell].y == y) {
+        if (placedCells[cell] && placedCells[cell].x == x && placedCells[cell].y == y) {
             return parseInt(cell);
         }
     }
@@ -214,12 +250,88 @@ function getCell(x, y) {
 /**
  * Draws the background
  */
-function drawBackground() {
+function drawBackground(x1, y1, x2, y2) {
     for (let i = 0; i < mapHeight; i++) {
         for (let o = 0; o < mapWidth; o++) {
-            drawMapCell(o, i, CELLS.EMPTY, 0, backgroundRenderer);
+            if (i >= y1 && i <= y2 && o >= x1 && o <= x2) {
+                drawMapCell(o, i, CELLS.EMPTY_PLACEABLE, 0, backgroundRenderer);
+            } else {
+                drawMapCell(o, i, CELLS.EMPTY, 0, backgroundRenderer);
+            }
         }
     }
+}
+
+/**
+ * Handles the mouse
+ */
+function getMousePos(evt) {
+    let rect = draggingCanvas.getBoundingClientRect();
+    return {
+        x: evt.clientX - rect.left,
+        y: evt.clientY - rect.top
+    };
+}
+
+draggingCanvas.addEventListener('mousedown', function (evt) {
+    mouseDown = true;
+    let mousePos = getMousePos(evt),
+        mapPos = { x: Math.floor(mousePos.x / cellSize), y: Math.floor(mousePos.y / cellSize) };
+    if (mapPos.x >= level.placeable.x1 && mapPos.y >= level.placeable.y1 && mapPos.x <= level.placeable.x2 && mapPos.y <= level.placeable.y2) {
+        cellHeld = getCell(mapPos.x, mapPos.y);
+        if (cellHeld && placedCells[cellHeld] != null && placedCells[cellHeld].type != CELLS.IMMOBILE) {
+            cellHeld = deepCopy(placedCells[cellHeld]);
+            placedCells[cellHeld.id].type = CELLS.NO_CELL;
+            dragOffset.x = mousePos.x - (mapPos.x * cellSize);
+            dragOffset.y = mousePos.y - (mapPos.y * cellSize);
+            drawMap();
+            clearCanvas(draggingRenderer);
+            drawMapCell(mousePos.x - dragOffset.x, mousePos.y - dragOffset.y, cellHeld.type, cellHeld.rotation, draggingRenderer);
+        } else {
+            cellHeld = null;
+        }
+    }
+}, false);
+
+draggingCanvas.addEventListener('mouseup', function (evt) {
+    mouseDown = false;
+    if (cellHeld) {
+        let mousePos = getMousePos(evt),
+            mapPos = { x: Math.floor((mousePos.x - dragOffset.x + Math.floor(cellSize / 2)) / cellSize), y: Math.floor((mousePos.y - dragOffset.y + Math.floor(cellSize / 2)) / cellSize) };
+        if (mapPos.x >= level.placeable.x1 && mapPos.y >= level.placeable.y1 && mapPos.x <= level.placeable.x2 && mapPos.y <= level.placeable.y2) {
+            placedCells[cellHeld.id].x = mapPos.x;
+            placedCells[cellHeld.id].y = mapPos.y;
+        }
+        placedCells[cellHeld.id].type = cellHeld.type;
+        clearCanvas(draggingRenderer);
+        drawMap();
+        cellHeld = null;
+    }
+}, false);
+
+draggingCanvas.addEventListener('mousemove', function (evt) {
+    if (mouseDown && cellHeld) {
+        let mousePos = getMousePos(evt);
+        clearCanvas(draggingRenderer);
+        drawMapCell(mousePos.x - dragOffset.x, mousePos.y - dragOffset.y, cellHeld.type, cellHeld.rotation, draggingRenderer);
+    }
+}, false);
+
+draggingCanvas.addEventListener('mouseout', function (evt) {
+    mouseDown = false;
+    if (cellHeld) {
+        clearCanvas(draggingRenderer);
+        placedCells[cellHeld.id].type = cellHeld.type;
+        drawMap();
+        cellHeld = null;
+    }
+}, false);
+
+/**
+ * Copies the values from an array or object rather than the memory space
+ */
+function deepCopy(toCopy) {
+    return JSON.parse(JSON.stringify(toCopy));
 }
 
 /**
