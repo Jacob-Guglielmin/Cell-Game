@@ -11,6 +11,7 @@ let canvas = document.getElementById("mainCanvas"),
 
     placedCells = [],
     targetsRemaining = 1,
+    currentLevel = 2,
 
     mapWidth,
     mapHeight,
@@ -19,20 +20,8 @@ let canvas = document.getElementById("mainCanvas"),
 
     mouseDown = false,
     cellHeld = null,
-    dragOffset = { x: 0, y: 0 },
+    dragOffset = { x: 0, y: 0 };
 
-    level = {
-        width: 10,
-        height: 6,
-        placeable: {
-            x1: 1,
-            y1: 1,
-            x2: 4,
-            y2: 4
-        }
-    };
-
-//Cell types
 const CELLS = {
     NO_CELL: -1,
     EMPTY: 0,
@@ -41,7 +30,43 @@ const CELLS = {
     PASSIVE: 60,
     PUSHER: 80,
     TARGET: 100
-};
+},
+    LEVELS = {
+        1: {
+            width: 12,
+            height: 7,
+            placeable: {
+                x1: 1,
+                y1: 1,
+                x2: 5,
+                y2: 5
+            },
+            placed: [
+                { x: 8, y: 3, type: CELLS.TARGET, rotation: 0 },
+                { x: 2, y: 2, type: CELLS.PUSHER, rotation: 1 }
+            ],
+            targets: 1
+        },
+        2: {
+            width: 12,
+            height: 7,
+            placeable: {
+                x1: 1,
+                y1: 1,
+                x2: 5,
+                y2: 5
+            },
+            placed: [
+                { x: 7, y: 3, type: CELLS.TARGET, rotation: 0 },
+                { x: 8, y: 3, type: CELLS.TARGET, rotation: 0 },
+                { x: 9, y: 3, type: CELLS.TARGET, rotation: 0 },
+                { x: 1, y: 5, type: CELLS.PUSHER, rotation: 1 },
+                { x: 4, y: 1, type: CELLS.PASSIVE, rotation: 1 },
+                { x: 2, y: 2, type: CELLS.PASSIVE, rotation: 1 },
+            ],
+            targets: 3
+        }
+    }
 
 /**
  * Fix for the javascript modulo operator
@@ -55,8 +80,8 @@ function mod(n, m) {
  */
 function init() {
     //Sets the size of the map in cells
-    mapWidth = level.width;
-    mapHeight = level.height;
+    mapWidth = LEVELS[currentLevel].width;
+    mapHeight = LEVELS[currentLevel].height;
 
     //Resizes the canvas to fit the map
     canvas.width = mapWidth * cellSize;
@@ -66,7 +91,7 @@ function init() {
     draggingCanvas.width = canvas.width;
     draggingCanvas.height = canvas.height;
 
-    drawBackground(level.placeable.x1, level.placeable.y1, level.placeable.x2, level.placeable.y2);
+    drawBackground(LEVELS[currentLevel].placeable.x1, LEVELS[currentLevel].placeable.y1, LEVELS[currentLevel].placeable.x2, LEVELS[currentLevel].placeable.y2);
 
     createMap(true);
 }
@@ -112,22 +137,25 @@ function step() {
                             if (nextPush == undefined || placedCells[nextPush] == null || placedCells[nextPush].type == CELLS.TARGET) {
                                 if (nextPush && placedCells[nextPush].type == CELLS.TARGET) {
                                     placedCells[nextPush] = null;
+                                    placedCells[toPush[toPush.length - 1]] = null;
                                     targetsRemaining--;
                                 }
                                 for (let cellPushing of toPush) {
-                                    switch (mod(cell.rotation, 4)) {
-                                        case 0:
-                                            placedCells[cellPushing].y--;
-                                            break;
-                                        case 1:
-                                            placedCells[cellPushing].x++;
-                                            break;
-                                        case 2:
-                                            placedCells[cellPushing].y++;
-                                            break;
-                                        case 3:
-                                            placedCells[cellPushing].x--;
-                                            break;
+                                    if (placedCells[cellPushing]) {
+                                        switch (mod(cell.rotation, 4)) {
+                                            case 0:
+                                                placedCells[cellPushing].y--;
+                                                break;
+                                            case 1:
+                                                placedCells[cellPushing].x++;
+                                                break;
+                                            case 2:
+                                                placedCells[cellPushing].y++;
+                                                break;
+                                            case 3:
+                                                placedCells[cellPushing].x--;
+                                                break;
+                                        }
                                     }
                                 }
                                 break;
@@ -174,8 +202,12 @@ function createMap(border) {
         }
     }
 
-    placedCells.push({ x: 7, y: 2, type: CELLS.TARGET, rotation: 0, id: placedCells.length });
-    placedCells.push({ x: 3, y: 3, type: CELLS.PUSHER, rotation: 1, id: placedCells.length });
+    for (let cell of LEVELS[currentLevel].placed) {
+        cell.id = placedCells.length;
+        placedCells.push(cell);
+    }
+
+    targetsRemaining = LEVELS[currentLevel].targets;
 
     drawMap();
 }
@@ -277,7 +309,7 @@ draggingCanvas.addEventListener('mousedown', function (evt) {
     mouseDown = true;
     let mousePos = getMousePos(evt),
         mapPos = { x: Math.floor(mousePos.x / cellSize), y: Math.floor(mousePos.y / cellSize) };
-    if (mapPos.x >= level.placeable.x1 && mapPos.y >= level.placeable.y1 && mapPos.x <= level.placeable.x2 && mapPos.y <= level.placeable.y2) {
+    if (mapPos.x >= LEVELS[currentLevel].placeable.x1 && mapPos.y >= LEVELS[currentLevel].placeable.y1 && mapPos.x <= LEVELS[currentLevel].placeable.x2 && mapPos.y <= LEVELS[currentLevel].placeable.y2) {
         cellHeld = getCell(mapPos.x, mapPos.y);
         if (cellHeld && placedCells[cellHeld] != null && placedCells[cellHeld].type != CELLS.IMMOBILE) {
             cellHeld = deepCopy(placedCells[cellHeld]);
@@ -298,7 +330,7 @@ draggingCanvas.addEventListener('mouseup', function (evt) {
     if (cellHeld) {
         let mousePos = getMousePos(evt),
             mapPos = { x: Math.floor((mousePos.x - dragOffset.x + Math.floor(cellSize / 2)) / cellSize), y: Math.floor((mousePos.y - dragOffset.y + Math.floor(cellSize / 2)) / cellSize) };
-        if (mapPos.x >= level.placeable.x1 && mapPos.y >= level.placeable.y1 && mapPos.x <= level.placeable.x2 && mapPos.y <= level.placeable.y2) {
+        if (mapPos.x >= LEVELS[currentLevel].placeable.x1 && mapPos.y >= LEVELS[currentLevel].placeable.y1 && mapPos.x <= LEVELS[currentLevel].placeable.x2 && mapPos.y <= LEVELS[currentLevel].placeable.y2) {
             placedCells[cellHeld.id].x = mapPos.x;
             placedCells[cellHeld.id].y = mapPos.y;
         }
