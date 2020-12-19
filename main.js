@@ -11,12 +11,15 @@ let canvas = document.getElementById("mainCanvas"),
 
     placedCells = [],
     targetsRemaining = 1,
-    currentLevel = 2,
+    currentLevel = 1,
 
     mapWidth,
     mapHeight,
 
     newCellId = 0,
+
+    animationStart = undefined,
+    animationTime = 200,
 
     mouseDown = false,
     cellHeld = null,
@@ -29,7 +32,8 @@ const CELLS = {
     IMMOBILE: 40,
     PASSIVE: 60,
     PUSHER: 80,
-    TARGET: 100
+    GENERATOR: 100,
+    TARGET: 120
 },
     LEVELS = {
         1: {
@@ -65,6 +69,41 @@ const CELLS = {
                 { x: 2, y: 2, type: CELLS.PASSIVE, rotation: 1 },
             ],
             targets: 3
+        },
+        3: {
+            width: 12,
+            height: 7,
+            placeable: {
+                x1: 1,
+                y1: 1,
+                x2: 5,
+                y2: 5
+            },
+            placed: [
+                { x: 7, y: 3, type: CELLS.TARGET, rotation: 0 },
+                { x: 8, y: 3, type: CELLS.TARGET, rotation: 0 },
+                { x: 9, y: 3, type: CELLS.TARGET, rotation: 0 },
+                { x: 2, y: 3, type: CELLS.GENERATOR, rotation: 1 },
+                { x: 4, y: 2, type: CELLS.PASSIVE, rotation: 1 }
+            ],
+            targets: 3
+        },
+        "testing": {
+            width: 15,
+            height: 15,
+            placeable: {
+                x1: 1,
+                y1: 1,
+                x2: 13,
+                y2: 13
+            },
+            placed: [
+                { x: 1, y: 1, type: CELLS.PASSIVE, rotation: 1 },
+                { x: 2, y: 1, type: CELLS.GENERATOR, rotation: 1 },
+                { x: 1, y: 2, type: CELLS.GENERATOR, rotation: 2 },
+                { x: 2, y: 2, type: CELLS.GENERATOR, rotation: 1 },
+            ],
+            targets: 999
         }
     }
 
@@ -91,100 +130,131 @@ function init() {
     draggingCanvas.width = canvas.width;
     draggingCanvas.height = canvas.height;
 
-    drawBackground(LEVELS[currentLevel].placeable.x1, LEVELS[currentLevel].placeable.y1, LEVELS[currentLevel].placeable.x2, LEVELS[currentLevel].placeable.y2);
-
-    createMap(true);
+    newMap();
 }
 
 function step() {
-    for (let cell of placedCells) {
-        if (cell) {
-            switch (cell.type) {
-                case CELLS.PUSHER:
-                    let pushLoopIndex = 1,
-                        toPush = [cell.id],
-                        moreCells = true;
-                    while (true) {
-                        let nextPush = undefined;
-                        switch (mod(cell.rotation, 4)) {
-                            case 0:
-                                if (cell.y - pushLoopIndex >= 0) {
-                                    nextPush = getCell(cell.x, cell.y - pushLoopIndex);
-                                }
+    if (animationStart == undefined) {
+        for (let cell of placedCells) {
+            if (cell && !cell.new) {
+                switch (cell.type) {
+                    case CELLS.PUSHER:
+                        let pushLoopIndex = 1,
+                            toPush = [cell.id],
+                            moreCells = true;
+                        while (true) {
+                            let nextPush = getCell(cell.x + (getChange(1, cell.rotation) * pushLoopIndex), cell.y + (getChange(0, cell.rotation) * pushLoopIndex));
+                            if (nextPush && placedCells[nextPush].type == CELLS.IMMOBILE) {
                                 break;
-
-                            case 1:
-                                if (cell.x + pushLoopIndex < mapWidth) {
-                                    nextPush = getCell(cell.x + pushLoopIndex, cell.y);
+                            } else {
+                                if (nextPush == undefined || placedCells[nextPush] == null || placedCells[nextPush].type == CELLS.TARGET) {
+                                    if (nextPush && placedCells[nextPush].type == CELLS.TARGET) {
+                                        placedCells[nextPush] = null;
+                                        placedCells[toPush[toPush.length - 1]] = null;
+                                        targetsRemaining--;
+                                    }
+                                    for (let cellPushing of toPush) {
+                                        if (placedCells[cellPushing]) {
+                                            placedCells[cellPushing].nextY = placedCells[cellPushing].y + getChange(0, cell.rotation);
+                                            placedCells[cellPushing].nextX = placedCells[cellPushing].x + getChange(1, cell.rotation);
+                                        }
+                                    }
+                                    break;
+                                } else if (placedCells[nextPush].type == CELLS.PUSHER || placedCells[nextPush].type == CELLS.GENERATOR) {
+                                    if (placedCells[nextPush].rotation == mod(cell.rotation + 2, 4)) {
+                                        if (placedCells[nextPush].type == CELLS.GENERATOR) {
+                                            let possibleDuplication = getCell(placedCells[nextPush].x + getChange(1, cell.rotation), placedCells[nextPush].y + getChange(0, cell.rotation));
+                                            if (possibleDuplication) {
+                                                break;
+                                            } else {
+                                                toPush.push(nextPush);
+                                            }
+                                        } else {
+                                            break;
+                                        }
+                                    } else if (placedCells[nextPush].type == CELLS.PUSHER && placedCells[nextPush].rotation == cell.rotation) {
+                                        moreCells = false;
+                                    } else {
+                                        toPush.push(nextPush);
+                                    }
+                                } else {
+                                    if (moreCells) {
+                                        toPush.push(nextPush);
+                                    }
                                 }
-                                break;
-
-                            case 2:
-                                if (cell.y + pushLoopIndex < mapHeight) {
-                                    nextPush = getCell(cell.x, cell.y + pushLoopIndex);
-                                }
-                                break;
-
-                            case 3:
-                                if (cell.x - pushLoopIndex >= 0) {
-                                    nextPush = getCell(cell.x - pushLoopIndex, cell.y);
-                                }
-                                break;
+                            }
+                            pushLoopIndex++;
                         }
-                        if (nextPush && placedCells[nextPush].type == CELLS.IMMOBILE) {
-                            break;
-                        } else {
-                            if (nextPush == undefined || placedCells[nextPush] == null || placedCells[nextPush].type == CELLS.TARGET) {
-                                if (nextPush && placedCells[nextPush].type == CELLS.TARGET) {
-                                    placedCells[nextPush] = null;
-                                    placedCells[toPush[toPush.length - 1]] = null;
-                                    targetsRemaining--;
-                                }
-                                for (let cellPushing of toPush) {
-                                    if (placedCells[cellPushing]) {
-                                        switch (mod(cell.rotation, 4)) {
-                                            case 0:
-                                                placedCells[cellPushing].y--;
+                        break;
+
+                    case CELLS.GENERATOR:
+                        let cellDuplicating = getCell(cell.x - getChange(1, cell.rotation), cell.y - getChange(0, cell.rotation));
+                        if (cellDuplicating) {
+                            let pushLoopIndex = 1,
+                                toPush = [],
+                                moreCells = true;
+                            while (true) {
+                                let nextPush = getCell(cell.x + (getChange(1, cell.rotation) * pushLoopIndex), cell.y + (getChange(0, cell.rotation) * pushLoopIndex));
+                                if (nextPush && placedCells[nextPush].type == CELLS.IMMOBILE) {
+                                    break;
+                                } else {
+                                    if (nextPush == undefined || placedCells[nextPush] == null || placedCells[nextPush].type == CELLS.TARGET) {
+                                        if (nextPush && placedCells[nextPush].type == CELLS.TARGET) {
+                                            placedCells[nextPush] = null;
+                                            placedCells[toPush[toPush.length - 1]] = null;
+                                            targetsRemaining--;
+                                        }
+                                        for (let cellPushing of toPush) {
+                                            if (placedCells[cellPushing]) {
+                                                placedCells[cellPushing].nextY = placedCells[cellPushing].y + getChange(0, cell.rotation);
+                                                placedCells[cellPushing].nextX = placedCells[cellPushing].x + getChange(1, cell.rotation);
+                                            }
+                                        }
+                                        placedCells.push({ x: cell.x, nextX: cell.x + getChange(1, cell.rotation), y: cell.y, nextY: cell.y + getChange(0, cell.rotation), type: placedCells[cellDuplicating].type, rotation: placedCells[cellDuplicating].rotation, id: placedCells.length, new: true });
+                                        break;
+                                    } else if (placedCells[nextPush].type == CELLS.PUSHER || placedCells[nextPush].type == CELLS.GENERATOR) {
+                                        if (placedCells[nextPush].rotation == mod(cell.rotation + 2, 4)) {
+                                            if (placedCells[nextPush].type == CELLS.GENERATOR) {
+                                                let possibleDuplication = getCell(placedCells[nextPush].x + getChange(1, cell.rotation), placedCells[nextPush].y + getChange(0, cell.rotation));
+                                                if (possibleDuplication) {
+                                                    break;
+                                                } else {
+                                                    toPush.push(nextPush);
+                                                }
+                                            } else {
                                                 break;
-                                            case 1:
-                                                placedCells[cellPushing].x++;
-                                                break;
-                                            case 2:
-                                                placedCells[cellPushing].y++;
-                                                break;
-                                            case 3:
-                                                placedCells[cellPushing].x--;
-                                                break;
+                                            }
+                                        } else if (placedCells[nextPush].type == CELLS.PUSHER && placedCells[nextPush].rotation == cell.rotation) {
+                                            moreCells = false;
+                                        } else {
+                                            toPush.push(nextPush);
+                                        }
+                                    } else {
+                                        if (moreCells) {
+                                            toPush.push(nextPush);
                                         }
                                     }
                                 }
-                                break;
-                            } else if (placedCells[nextPush].type == CELLS.PUSHER) {
-                                if (placedCells[nextPush].rotation == mod(cell.rotation + 2, 4)) {
-                                    break;
-                                } else if (placedCells[nextPush].rotation == cell.rotation) {
-                                    moreCells = false;
-                                } else {
-                                    toPush.push(nextPush);
-                                }
-                            } else {
-                                if (moreCells) {
-                                    toPush.push(nextPush);
-                                }
+                                pushLoopIndex++;
                             }
                         }
-                        pushLoopIndex++;
-                    }
-                    break;
+                        break;
 
-                default:
-                    break;
+                    default:
+                        break;
+                }
+            } else if (cell && cell.new) {
+                delete cell.new;
             }
         }
-    }
-    drawMap();
-    if (targetsRemaining == 0) {
-        alert("You win!");
+        requestAnimationFrame(function (timestamp) {
+            animateStep(timestamp);
+        });
+        if (targetsRemaining == 0) {
+            alert("You win!");
+            currentLevel++;
+            newMap();
+        }
     }
 }
 
@@ -219,8 +289,18 @@ function drawMap() {
     clearCanvas(renderer);
     for (let cell of placedCells) {
         if (cell) {
-            drawMapCell(cell.x, cell.y, cell.type, cell.rotation, renderer);
+            drawMapCell(cell.x, cell.y, cell.type, cell.rotation, renderer, true);
         }
+    }
+}
+
+/**
+ * Builds the map with the current level
+ */
+function newMap() {
+    if (LEVELS[currentLevel]) {
+        drawBackground(LEVELS[currentLevel].placeable.x1, LEVELS[currentLevel].placeable.y1, LEVELS[currentLevel].placeable.x2, LEVELS[currentLevel].placeable.y2);
+        createMap(true);
     }
 }
 
@@ -234,9 +314,9 @@ function drawMap() {
  * @param canvasRenderer The renderer to use
  * 
  */
-function drawMapCell(x, y, spritePosition, rotation = 0, canvasRenderer) {
+function drawMapCell(x, y, spritePosition, rotation = 0, canvasRenderer, grid = true) {
     if (spritePosition != CELLS.NO_CELL) {
-        if (canvasRenderer != draggingRenderer) {
+        if (grid) {
             x *= cellSize;
             y *= cellSize;
         }
@@ -286,11 +366,47 @@ function drawBackground(x1, y1, x2, y2) {
     for (let i = 0; i < mapHeight; i++) {
         for (let o = 0; o < mapWidth; o++) {
             if (i >= y1 && i <= y2 && o >= x1 && o <= x2) {
-                drawMapCell(o, i, CELLS.EMPTY_PLACEABLE, 0, backgroundRenderer);
+                drawMapCell(o, i, CELLS.EMPTY_PLACEABLE, 0, backgroundRenderer, true);
             } else {
-                drawMapCell(o, i, CELLS.EMPTY, 0, backgroundRenderer);
+                drawMapCell(o, i, CELLS.EMPTY, 0, backgroundRenderer, true);
             }
         }
+    }
+}
+
+function animateStep(timestamp) {
+    if (animationStart == undefined) {
+        animationStart = timestamp;
+    }
+    let elapsed = timestamp - animationStart;
+
+    clearCanvas(renderer);
+
+    for (let cell of placedCells) {
+        if (cell) {
+            if (cell.nextX) {
+                drawMapCell((Math.min(Math.max((cell.nextX - cell.x) / animationTime * elapsed, -cellSize), cellSize) + cell.x) * cellSize, (Math.min(Math.max((cell.nextY - cell.y) / animationTime * elapsed, -cellSize), cellSize) + cell.y) * cellSize, cell.type, cell.rotation, renderer, false);
+            } else {
+                drawMapCell(cell.x, cell.y, cell.type, cell.rotation, renderer, true);
+            }
+        }
+    }
+
+    if (elapsed <= animationTime) {
+        requestAnimationFrame(function (timestamp) {
+            animateStep(timestamp);
+        });
+    } else {
+        animationStart = undefined;
+        for (let cell of placedCells) {
+            if (cell && cell.nextX) {
+                cell.x = cell.nextX;
+                cell.y = cell.nextY;
+                delete cell.nextX;
+                delete cell.nextY;
+            }
+        }
+        drawMap();
     }
 }
 
@@ -318,7 +434,7 @@ draggingCanvas.addEventListener('mousedown', function (evt) {
             dragOffset.y = mousePos.y - (mapPos.y * cellSize);
             drawMap();
             clearCanvas(draggingRenderer);
-            drawMapCell(mousePos.x - dragOffset.x, mousePos.y - dragOffset.y, cellHeld.type, cellHeld.rotation, draggingRenderer);
+            drawMapCell(mousePos.x - dragOffset.x, mousePos.y - dragOffset.y, cellHeld.type, cellHeld.rotation, draggingRenderer, false);
         } else {
             cellHeld = null;
         }
@@ -330,7 +446,7 @@ draggingCanvas.addEventListener('mouseup', function (evt) {
     if (cellHeld) {
         let mousePos = getMousePos(evt),
             mapPos = { x: Math.floor((mousePos.x - dragOffset.x + Math.floor(cellSize / 2)) / cellSize), y: Math.floor((mousePos.y - dragOffset.y + Math.floor(cellSize / 2)) / cellSize) };
-        if (mapPos.x >= LEVELS[currentLevel].placeable.x1 && mapPos.y >= LEVELS[currentLevel].placeable.y1 && mapPos.x <= LEVELS[currentLevel].placeable.x2 && mapPos.y <= LEVELS[currentLevel].placeable.y2) {
+        if (mapPos.x >= LEVELS[currentLevel].placeable.x1 && mapPos.y >= LEVELS[currentLevel].placeable.y1 && mapPos.x <= LEVELS[currentLevel].placeable.x2 && mapPos.y <= LEVELS[currentLevel].placeable.y2 && !getCell(mapPos.x, mapPos.y)) {
             placedCells[cellHeld.id].x = mapPos.x;
             placedCells[cellHeld.id].y = mapPos.y;
         }
@@ -345,7 +461,7 @@ draggingCanvas.addEventListener('mousemove', function (evt) {
     if (mouseDown && cellHeld) {
         let mousePos = getMousePos(evt);
         clearCanvas(draggingRenderer);
-        drawMapCell(mousePos.x - dragOffset.x, mousePos.y - dragOffset.y, cellHeld.type, cellHeld.rotation, draggingRenderer);
+        drawMapCell(mousePos.x - dragOffset.x, mousePos.y - dragOffset.y, cellHeld.type, cellHeld.rotation, draggingRenderer, false);
     }
 }, false);
 
@@ -364,6 +480,38 @@ draggingCanvas.addEventListener('mouseout', function (evt) {
  */
 function deepCopy(toCopy) {
     return JSON.parse(JSON.stringify(toCopy));
+}
+
+/**
+ * Gets the x or y change for a rotation id
+ */
+function getChange(direction, rotation) {
+    switch (mod(rotation, 4)) {
+        case 0:
+            if (direction == 0) {
+                return -1;
+            } else {
+                return 0;
+            }
+        case 1:
+            if (direction == 0) {
+                return 0;
+            } else {
+                return 1;
+            }
+        case 2:
+            if (direction == 0) {
+                return 1;
+            } else {
+                return 0;
+            }
+        case 3:
+            if (direction == 0) {
+                return 0;
+            } else {
+                return -1;
+            }
+    }
 }
 
 /**
