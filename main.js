@@ -11,7 +11,7 @@ let canvas = document.getElementById("mainCanvas"),
 
     placedCells = [],
     targetsRemaining = 1,
-    currentLevel = 1,
+    currentLevel = "testing",
 
     mapWidth,
     mapHeight,
@@ -33,7 +33,9 @@ const CELLS = {
     PASSIVE: 60,
     PUSHER: 80,
     GENERATOR: 100,
-    TARGET: 120
+    ROTATOR: 120,
+    SLIDE: 140,
+    TARGET: 160
 },
     LEVELS = {
         1: {
@@ -80,6 +82,22 @@ const CELLS = {
                 y2: 5
             },
             placed: [
+                { x: 8, y: 3, type: CELLS.TARGET, rotation: 0 },
+                { x: 2, y: 2, type: CELLS.PUSHER, rotation: 0 },
+                { x: 3, y: 4, type: CELLS.ROTATOR, rotation: 0 }
+            ],
+            targets: 1
+        },
+        4: {
+            width: 12,
+            height: 7,
+            placeable: {
+                x1: 1,
+                y1: 1,
+                x2: 5,
+                y2: 5
+            },
+            placed: [
                 { x: 7, y: 3, type: CELLS.TARGET, rotation: 0 },
                 { x: 8, y: 3, type: CELLS.TARGET, rotation: 0 },
                 { x: 9, y: 3, type: CELLS.TARGET, rotation: 0 },
@@ -99,9 +117,15 @@ const CELLS = {
             },
             placed: [
                 { x: 1, y: 1, type: CELLS.PASSIVE, rotation: 1 },
+                { x: 9, y: 3, type: CELLS.PUSHER, rotation: 0 },
+                { x: 6, y: 4, type: CELLS.PUSHER, rotation: 1 },
+                { x: 3, y: 6, type: CELLS.SLIDE, rotation: 1 },
+                { x: 5, y: 1, type: CELLS.SLIDE, rotation: 0 },
                 { x: 2, y: 1, type: CELLS.GENERATOR, rotation: 1 },
                 { x: 1, y: 2, type: CELLS.GENERATOR, rotation: 2 },
                 { x: 2, y: 2, type: CELLS.GENERATOR, rotation: 1 },
+                { x: 3, y: 3, type: CELLS.TARGET, rotation: 0 },
+                { x: 4, y: 4, type: CELLS.ROTATOR, rotation: 0 }
             ],
             targets: 999
         }
@@ -136,18 +160,105 @@ function init() {
 function step() {
     if (animationStart == undefined) {
         for (let cell of placedCells) {
-            if (cell && !cell.new) {
+            //Save current state
+            if (cell) {
+                cell.oldRotation = deepCopy(cell.rotation);
+                cell.oldX = deepCopy(cell.x);
+                cell.oldY = deepCopy(cell.y);
+            }
+        }
+        for (let cell of placedCells) {
+            //Don't process nonexistent cells, immobile cells, or cells that have just been made
+            if (cell && !cell.new && cell.type != CELLS.IMMOBILE) {
+
+                //Check for rotation
+                for (let i = -1; i <= 1; i++) {
+                    let possibleRotator = getCell(cell.x, cell.y + i);
+                    if (i != 0 && possibleRotator && placedCells[possibleRotator] != null && placedCells[possibleRotator].type == CELLS.ROTATOR) {
+                        cell.rotation++;
+                    }
+                }
+                for (let i = -1; i <= 1; i++) {
+                    let possibleRotator = getCell(cell.x + i, cell.y)
+                    if (i != 0 && possibleRotator && placedCells[possibleRotator] != null && placedCells[possibleRotator].type == CELLS.ROTATOR) {
+                        cell.rotation++;
+                    }
+                }
+
                 switch (cell.type) {
                     case CELLS.PUSHER:
                         let pushLoopIndex = 1,
                             toPush = [cell.id],
                             moreCells = true;
                         while (true) {
+                            //Get the next cell that we might need to push
                             let nextPush = getCell(cell.x + (getChange(1, cell.rotation) * pushLoopIndex), cell.y + (getChange(0, cell.rotation) * pushLoopIndex));
                             if (nextPush && placedCells[nextPush].type == CELLS.IMMOBILE) {
+                                //If the cell is immobile, we dont need to push anything
                                 break;
+                            } else if (nextPush == undefined || placedCells[nextPush] == null || placedCells[nextPush].type == CELLS.TARGET) {
+                                if (nextPush && placedCells[nextPush].type == CELLS.TARGET) {
+                                    //If the cell is a target, destroy it and the last cell in toPush
+                                    placedCells[nextPush] = null;
+                                    placedCells[toPush[toPush.length - 1]] = null;
+                                    targetsRemaining--;
+                                }
+                                //Push every cell in toPush
+                                for (let cellPushing of toPush) {
+                                    if (placedCells[cellPushing]) {
+                                        placedCells[cellPushing].y += getChange(0, cell.rotation);
+                                        placedCells[cellPushing].x += getChange(1, cell.rotation);
+                                    }
+                                }
+                                break;
+                            } else if (placedCells[nextPush].type == CELLS.SLIDE) {
+                                if (mod(cell.rotation, 2) == mod(placedCells[nextPush].rotation, 2)) {
+                                    break;
+                                } else {
+                                    toPush.push(nextPush);
+                                }
+                            } else if (placedCells[nextPush].type == CELLS.PUSHER || placedCells[nextPush].type == CELLS.GENERATOR) {
+                                //If the cell is facing the opposite way, we can't push it
+                                if (placedCells[nextPush].rotation == mod(cell.rotation + 2, 4)) {
+                                    if (placedCells[nextPush].type == CELLS.GENERATOR) {
+                                        let possibleDuplication = getCell(placedCells[nextPush].x + getChange(1, cell.rotation), placedCells[nextPush].y + getChange(0, cell.rotation));
+                                        if (possibleDuplication) {
+                                            break;
+                                        } else {
+                                            toPush.push(nextPush);
+                                        }
+                                    } else {
+                                        break;
+                                    }
+                                    //If the cell is a pusher going the same way, we dont need to push it or anything after it
+                                } else if (placedCells[nextPush].type == CELLS.PUSHER && placedCells[nextPush].rotation == cell.rotation) {
+                                    moreCells = false;
+                                } else {
+                                    toPush.push(nextPush);
+                                }
                             } else {
-                                if (nextPush == undefined || placedCells[nextPush] == null || placedCells[nextPush].type == CELLS.TARGET) {
+                                if (moreCells) {
+                                    toPush.push(nextPush);
+                                }
+
+                            }
+                            pushLoopIndex++;
+                        }
+                        break;
+
+                    case CELLS.GENERATOR:
+                        //Get the cell to duplicate
+                        let cellDuplicating = getCell(cell.x - getChange(1, cell.rotation), cell.y - getChange(0, cell.rotation));
+                        if (cellDuplicating) {
+                            let pushLoopIndex = 1,
+                                toPush = [],
+                                moreCells = true;
+                            while (true) {
+                                //Push everything in front
+                                let nextPush = getCell(cell.x + (getChange(1, cell.rotation) * pushLoopIndex), cell.y + (getChange(0, cell.rotation) * pushLoopIndex));
+                                if (nextPush && placedCells[nextPush].type == CELLS.IMMOBILE) {
+                                    break;
+                                } else if (nextPush == undefined || placedCells[nextPush] == null || placedCells[nextPush].type == CELLS.TARGET) {
                                     if (nextPush && placedCells[nextPush].type == CELLS.TARGET) {
                                         placedCells[nextPush] = null;
                                         placedCells[toPush[toPush.length - 1]] = null;
@@ -155,11 +266,18 @@ function step() {
                                     }
                                     for (let cellPushing of toPush) {
                                         if (placedCells[cellPushing]) {
-                                            placedCells[cellPushing].nextY = placedCells[cellPushing].y + getChange(0, cell.rotation);
-                                            placedCells[cellPushing].nextX = placedCells[cellPushing].x + getChange(1, cell.rotation);
+                                            placedCells[cellPushing].y += getChange(0, cell.rotation);
+                                            placedCells[cellPushing].x += getChange(1, cell.rotation);
                                         }
                                     }
+                                    placedCells.push({ oldX: cell.x, x: cell.x + getChange(1, cell.rotation), oldY: cell.y, y: cell.y + getChange(0, cell.rotation), type: placedCells[cellDuplicating].type, rotation: placedCells[cellDuplicating].rotation, id: placedCells.length, new: true });
                                     break;
+                                } else if (placedCells[nextPush].type == CELLS.SLIDE) {
+                                    if (mod(cell.rotation, 2) == mod(placedCells[nextPush].rotation, 2)) {
+                                        break;
+                                    } else {
+                                        toPush.push(nextPush);
+                                    }
                                 } else if (placedCells[nextPush].type == CELLS.PUSHER || placedCells[nextPush].type == CELLS.GENERATOR) {
                                     if (placedCells[nextPush].rotation == mod(cell.rotation + 2, 4)) {
                                         if (placedCells[nextPush].type == CELLS.GENERATOR) {
@@ -182,59 +300,6 @@ function step() {
                                         toPush.push(nextPush);
                                     }
                                 }
-                            }
-                            pushLoopIndex++;
-                        }
-                        break;
-
-                    case CELLS.GENERATOR:
-                        let cellDuplicating = getCell(cell.x - getChange(1, cell.rotation), cell.y - getChange(0, cell.rotation));
-                        if (cellDuplicating) {
-                            let pushLoopIndex = 1,
-                                toPush = [],
-                                moreCells = true;
-                            while (true) {
-                                let nextPush = getCell(cell.x + (getChange(1, cell.rotation) * pushLoopIndex), cell.y + (getChange(0, cell.rotation) * pushLoopIndex));
-                                if (nextPush && placedCells[nextPush].type == CELLS.IMMOBILE) {
-                                    break;
-                                } else {
-                                    if (nextPush == undefined || placedCells[nextPush] == null || placedCells[nextPush].type == CELLS.TARGET) {
-                                        if (nextPush && placedCells[nextPush].type == CELLS.TARGET) {
-                                            placedCells[nextPush] = null;
-                                            placedCells[toPush[toPush.length - 1]] = null;
-                                            targetsRemaining--;
-                                        }
-                                        for (let cellPushing of toPush) {
-                                            if (placedCells[cellPushing]) {
-                                                placedCells[cellPushing].nextY = placedCells[cellPushing].y + getChange(0, cell.rotation);
-                                                placedCells[cellPushing].nextX = placedCells[cellPushing].x + getChange(1, cell.rotation);
-                                            }
-                                        }
-                                        placedCells.push({ x: cell.x, nextX: cell.x + getChange(1, cell.rotation), y: cell.y, nextY: cell.y + getChange(0, cell.rotation), type: placedCells[cellDuplicating].type, rotation: placedCells[cellDuplicating].rotation, id: placedCells.length, new: true });
-                                        break;
-                                    } else if (placedCells[nextPush].type == CELLS.PUSHER || placedCells[nextPush].type == CELLS.GENERATOR) {
-                                        if (placedCells[nextPush].rotation == mod(cell.rotation + 2, 4)) {
-                                            if (placedCells[nextPush].type == CELLS.GENERATOR) {
-                                                let possibleDuplication = getCell(placedCells[nextPush].x + getChange(1, cell.rotation), placedCells[nextPush].y + getChange(0, cell.rotation));
-                                                if (possibleDuplication) {
-                                                    break;
-                                                } else {
-                                                    toPush.push(nextPush);
-                                                }
-                                            } else {
-                                                break;
-                                            }
-                                        } else if (placedCells[nextPush].type == CELLS.PUSHER && placedCells[nextPush].rotation == cell.rotation) {
-                                            moreCells = false;
-                                        } else {
-                                            toPush.push(nextPush);
-                                        }
-                                    } else {
-                                        if (moreCells) {
-                                            toPush.push(nextPush);
-                                        }
-                                    }
-                                }
                                 pushLoopIndex++;
                             }
                         }
@@ -244,12 +309,15 @@ function step() {
                         break;
                 }
             } else if (cell && cell.new) {
+                //New cells are no longer new
                 delete cell.new;
             }
         }
+        //Animate everything
         requestAnimationFrame(function (timestamp) {
             animateStep(timestamp);
         });
+        //Check if we won
         if (targetsRemaining == 0) {
             alert("You win!");
             currentLevel++;
@@ -342,7 +410,7 @@ function clearCanvas(canvasRenderer) {
  * Gets the rotation in radians for a rotation id - 0 is up, 1 is right, 2 is down, 3 is left
  */
 function getRotation(rotation) {
-    return Math.PI / 2 * mod(rotation, 4);
+    return Math.PI / 2 * rotation;
 }
 
 
@@ -382,15 +450,35 @@ function animateStep(timestamp) {
 
     clearCanvas(renderer);
 
+    let generators = [];
     for (let cell of placedCells) {
-        if (cell) {
-            if (cell.nextX) {
-                drawMapCell((Math.min(Math.max((cell.nextX - cell.x) / animationTime * elapsed, -cellSize), cellSize) + cell.x) * cellSize, (Math.min(Math.max((cell.nextY - cell.y) / animationTime * elapsed, -cellSize), cellSize) + cell.y) * cellSize, cell.type, cell.rotation, renderer, false);
+        if (cell && cell.type != CELLS.GENERATOR) {
+            let xDraw, yDraw, rotationDraw;
+            xDraw = (Math.min(Math.max((cell.x - cell.oldX) / animationTime * elapsed, -cellSize), cellSize) + cell.oldX) * cellSize;
+            yDraw = (Math.min(Math.max((cell.y - cell.oldY) / animationTime * elapsed, -cellSize), cellSize) + cell.oldY) * cellSize;
+            if (cell.oldRotation != undefined) {
+                rotationDraw = Math.min(Math.max((cell.rotation - cell.oldRotation) / animationTime * elapsed, 0), 4) + cell.oldRotation;
             } else {
-                drawMapCell(cell.x, cell.y, cell.type, cell.rotation, renderer, true);
+                rotationDraw = cell.rotation;
             }
+            drawMapCell(xDraw, yDraw, cell.type, rotationDraw, renderer, false);
+        } else if (cell && cell.type == CELLS.GENERATOR) {
+            generators.push(cell);
         }
     }
+    //Render generators on top
+    for (let cell of generators) {
+        let xDraw, yDraw, rotationDraw;
+        xDraw = (Math.min(Math.max((cell.x - cell.oldX) / animationTime * elapsed, -cellSize), cellSize) + cell.oldX) * cellSize;
+        yDraw = (Math.min(Math.max((cell.y - cell.oldY) / animationTime * elapsed, -cellSize), cellSize) + cell.oldY) * cellSize;
+        if (cell.oldRotation != undefined) {
+            rotationDraw = Math.min(Math.max((cell.rotation - cell.oldRotation) / animationTime * elapsed, 0), 4) + cell.oldRotation;
+        } else {
+            rotationDraw = cell.rotation;
+        }
+        drawMapCell(xDraw, yDraw, cell.type, rotationDraw, renderer, false);
+    }
+
 
     if (elapsed <= animationTime) {
         requestAnimationFrame(function (timestamp) {
@@ -398,14 +486,6 @@ function animateStep(timestamp) {
         });
     } else {
         animationStart = undefined;
-        for (let cell of placedCells) {
-            if (cell && cell.nextX) {
-                cell.x = cell.nextX;
-                cell.y = cell.nextY;
-                delete cell.nextX;
-                delete cell.nextY;
-            }
-        }
         drawMap();
     }
 }
