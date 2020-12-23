@@ -11,7 +11,7 @@ let canvas = document.getElementById("mainCanvas"),
 
     placedCells = [],
     targetsRemaining = 1,
-    currentLevel = "testing",
+    currentLevel = 1,
 
     mapWidth,
     mapHeight,
@@ -20,6 +20,9 @@ let canvas = document.getElementById("mainCanvas"),
 
     animationStart = undefined,
     animationTime = 200,
+    shouldPlay = true,
+    playing = false,
+    stepDelay = 400,
 
     mouseDown = false,
     cellHeld = null,
@@ -158,6 +161,9 @@ function init() {
 }
 
 function step() {
+    if (shouldPlay) {
+        playing = true;
+    }
     if (animationStart == undefined) {
         for (let cell of placedCells) {
             //Save current state
@@ -319,9 +325,17 @@ function step() {
         });
         //Check if we won
         if (targetsRemaining == 0) {
+            shouldPlay = false;
+            playing = false;
             alert("You win!");
             currentLevel++;
             newMap();
+        }
+        if (shouldPlay) {
+            while (animationStart != undefined);
+            setTimeout(() => {
+                step();
+            }, stepDelay);
         }
     }
 }
@@ -366,6 +380,7 @@ function drawMap() {
  * Builds the map with the current level
  */
 function newMap() {
+    placedCells = [];
     if (LEVELS[currentLevel]) {
         drawBackground(LEVELS[currentLevel].placeable.x1, LEVELS[currentLevel].placeable.y1, LEVELS[currentLevel].placeable.x2, LEVELS[currentLevel].placeable.y2);
         createMap(true);
