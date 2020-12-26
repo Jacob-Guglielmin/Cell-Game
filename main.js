@@ -11,7 +11,7 @@ let canvas = document.getElementById("mainCanvas"),
 
     placedCells = [],
     targetsRemaining = 1,
-    currentLevel = 1,
+    currentLevel = 6,
 
     mapWidth,
     mapHeight,
@@ -108,6 +108,52 @@ const CELLS = {
                 { x: 4, y: 2, type: CELLS.PASSIVE, rotation: 1 }
             ],
             targets: 3
+        },
+        5: {
+            width: 22,
+            height: 12,
+            placeable: {
+                x1: 1,
+                y1: 1,
+                x2: 10,
+                y2: 5
+            },
+            placed: [
+                { x: 2, y: 9, type: CELLS.PUSHER, rotation: 1 },
+                { x: 3, y: 9, type: CELLS.SLIDE, rotation: 1 },
+                { x: 7, y: 3, type: CELLS.PUSHER, rotation: 2 },
+                { x: 4, y: 2, type: CELLS.PUSHER, rotation: 2 },
+                { x: 2, y: 4, type: CELLS.PASSIVE, rotation: 0 },
+                { x: 6, y: 2, type: CELLS.PASSIVE, rotation: 0 },
+                { x: 18, y: 9, type: CELLS.TARGET, rotation: 0 },
+                { x: 19, y: 9, type: CELLS.TARGET, rotation: 0 },
+            ],
+            targets: 2
+        },
+        6: {
+            width: 12,
+            height: 17,
+            placeable: {
+                x1: 1,
+                y1: 1,
+                x2: 5,
+                y2: 5
+            },
+            cutout: {
+                x1: 7,
+                y1: 0,
+                x2: 11,
+                y2: 11
+            },
+            placed: [
+                { x: 1, y: 1, type: CELLS.PUSHER, rotation: 1 },
+                { x: 3, y: 5, type: CELLS.SLIDE, rotation: 1 },
+                { x: 5, y: 4, type: CELLS.PUSHER, rotation: 2 },
+                { x: 4, y: 2, type: CELLS.PUSHER, rotation: 2 },
+                { x: 2, y: 3, type: CELLS.PASSIVE, rotation: 0 },
+                { x: 9, y: 14, type: CELLS.TARGET, rotation: 0 },
+            ],
+            targets: 1
         },
         "testing": {
             width: 15,
@@ -342,13 +388,28 @@ function step() {
 
 /**
  * Populates the map with cells
- * 
- * @param border Whether there should be a border or not
  */
-function createMap(border) {
+function createMap() {
     for (let i = 0; i < mapHeight; i++) {
         for (let o = 0; o < mapWidth; o++) {
-            if (border && (o == 0 || o == mapWidth - 1 || i == 0 || i == mapHeight - 1)) {
+            if (o == 0 || o == mapWidth - 1 || i == 0 || i == mapHeight - 1) {
+                placedCells.push({ x: o, y: i, type: CELLS.IMMOBILE, rotation: 0, id: placedCells.length });
+            }
+
+            if (LEVELS[currentLevel].cutout) {
+                //Remove floating cells
+                for (let cell in placedCells) {
+                    if (placedCells[cell] && placedCells[cell].y >= LEVELS[currentLevel].cutout.y1 && placedCells[cell].y <= LEVELS[currentLevel].cutout.y2 && placedCells[cell].x >= LEVELS[currentLevel].cutout.x1 && placedCells[cell].x <= LEVELS[currentLevel].cutout.x2) {
+                        placedCells[cell] = null;
+                    }
+                }
+            }
+        }
+    }
+    //Add border around the cutout
+    for (let i = LEVELS[currentLevel].cutout.y1 - 1; i <= LEVELS[currentLevel].cutout.y2 + 1; i++) {
+        for (let o = LEVELS[currentLevel].cutout.x1 - 1; o <= LEVELS[currentLevel].cutout.x2 + 1; o++) {
+            if (i > 0 && i < mapHeight && o > 0 && o < mapWidth && (i < LEVELS[currentLevel].cutout.y1 || i > LEVELS[currentLevel].cutout.y2 || o < LEVELS[currentLevel].cutout.x1 || o > LEVELS[currentLevel].cutout.x2)) {
                 placedCells.push({ x: o, y: i, type: CELLS.IMMOBILE, rotation: 0, id: placedCells.length });
             }
         }
@@ -382,7 +443,7 @@ function drawMap() {
 function newMap() {
     placedCells = [];
     if (LEVELS[currentLevel]) {
-        drawBackground(LEVELS[currentLevel].placeable.x1, LEVELS[currentLevel].placeable.y1, LEVELS[currentLevel].placeable.x2, LEVELS[currentLevel].placeable.y2);
+        drawBackground();
         createMap(true);
     }
 }
@@ -445,13 +506,19 @@ function getCell(x, y) {
 /**
  * Draws the background
  */
-function drawBackground(x1, y1, x2, y2) {
+function drawBackground() {
     for (let i = 0; i < mapHeight; i++) {
         for (let o = 0; o < mapWidth; o++) {
-            if (i >= y1 && i <= y2 && o >= x1 && o <= x2) {
+            if (i >= LEVELS[currentLevel].placeable.y1 && i <= LEVELS[currentLevel].placeable.y2 && o >= LEVELS[currentLevel].placeable.x1 && o <= LEVELS[currentLevel].placeable.x2) {
                 drawMapCell(o, i, CELLS.EMPTY_PLACEABLE, 0, backgroundRenderer, true);
             } else {
-                drawMapCell(o, i, CELLS.EMPTY, 0, backgroundRenderer, true);
+                if (LEVELS[currentLevel].cutout) {
+                    if (i < LEVELS[currentLevel].cutout.y1 || i > LEVELS[currentLevel].cutout.y2 || o < LEVELS[currentLevel].cutout.x1 || o > LEVELS[currentLevel].cutout.x2) {
+                        drawMapCell(o, i, CELLS.EMPTY, 0, backgroundRenderer, true);
+                    }
+                } else {
+                    drawMapCell(o, i, CELLS.EMPTY, 0, backgroundRenderer, true);
+                }
             }
         }
     }
