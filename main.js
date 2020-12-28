@@ -10,8 +10,9 @@ let canvas = document.getElementById("mainCanvas"),
     cellSize = 30,
 
     placedCells = [],
+    savedLayout = [],
     targetsRemaining = 1,
-    currentLevel = 6,
+    currentLevel = 1,
 
     mapWidth,
     mapHeight,
@@ -20,9 +21,10 @@ let canvas = document.getElementById("mainCanvas"),
 
     animationStart = undefined,
     animationTime = 200,
-    shouldPlay = true,
+    animation = undefined,
     playing = false,
     stepDelay = 400,
+    nextStep = undefined,
 
     mouseDown = false,
     cellHeld = null,
@@ -155,6 +157,37 @@ const CELLS = {
             ],
             targets: 1
         },
+        7: {
+            width: 18,
+            height: 13,
+            placeable: {
+                x1: 1,
+                y1: 8,
+                x2: 4,
+                y2: 11
+            },
+            cutout: {
+                x1: 0,
+                y1: 0,
+                x2: 7,
+                y2: 6
+            },
+            placed: [
+                { x: 2, y: 9, type: CELLS.GENERATOR, rotation: 1 },
+                { x: 4, y: 11, type: CELLS.GENERATOR, rotation: 1 },
+                { x: 3, y: 8, type: CELLS.GENERATOR, rotation: 0 },
+                { x: 1, y: 11, type: CELLS.PASSIVE, rotation: 0 },
+                { x: 9, y: 1, type: CELLS.TARGET, rotation: 0 },
+                { x: 10, y: 1, type: CELLS.TARGET, rotation: 0 },
+                { x: 11, y: 1, type: CELLS.TARGET, rotation: 0 },
+                { x: 12, y: 1, type: CELLS.TARGET, rotation: 0 },
+                { x: 13, y: 1, type: CELLS.TARGET, rotation: 0 },
+                { x: 14, y: 1, type: CELLS.TARGET, rotation: 0 },
+                { x: 15, y: 1, type: CELLS.TARGET, rotation: 0 },
+                { x: 16, y: 1, type: CELLS.TARGET, rotation: 0 },
+            ],
+            targets: 8
+        },
         "testing": {
             width: 15,
             height: 15,
@@ -191,25 +224,13 @@ function mod(n, m) {
  * Starts the game
  */
 function init() {
-    //Sets the size of the map in cells
-    mapWidth = LEVELS[currentLevel].width;
-    mapHeight = LEVELS[currentLevel].height;
-
-    //Resizes the canvas to fit the map
-    canvas.width = mapWidth * cellSize;
-    canvas.height = mapHeight * cellSize;
-    backgroundCanvas.width = canvas.width;
-    backgroundCanvas.height = canvas.height;
-    draggingCanvas.width = canvas.width;
-    draggingCanvas.height = canvas.height;
-
     newMap();
 }
 
+/**
+ * Moves one step forward
+ */
 function step() {
-    if (shouldPlay) {
-        playing = true;
-    }
     if (animationStart == undefined) {
         for (let cell of placedCells) {
             //Save current state
@@ -366,23 +387,49 @@ function step() {
             }
         }
         //Animate everything
-        requestAnimationFrame(function (timestamp) {
+        animation = requestAnimationFrame(function (timestamp) {
             animateStep(timestamp);
         });
         //Check if we won
         if (targetsRemaining == 0) {
-            shouldPlay = false;
             playing = false;
             alert("You win!");
             currentLevel++;
             newMap();
         }
-        if (shouldPlay) {
+        if (playing) {
             while (animationStart != undefined);
-            setTimeout(() => {
+            nextStep = setTimeout(() => {
                 step();
             }, stepDelay);
         }
+    }
+}
+
+/**
+ * Starts the sim
+ */
+function play() {
+    if (!playing) {
+        savedLayout = deepCopy(placedCells);
+        playing = true;
+        step();
+    }
+}
+
+/**
+ * Resets the map to the most recent used layout
+ */
+function reset() {
+    cancelAnimationFrame(animation);
+    animationStart = undefined;
+    clearTimeout(nextStep);
+    playing = false;
+    if (savedLayout[0] !== undefined) {
+        placedCells = deepCopy(savedLayout);
+        drawMap();
+    } else {
+        newMap();
     }
 }
 
@@ -407,10 +454,12 @@ function createMap() {
         }
     }
     //Add border around the cutout
-    for (let i = LEVELS[currentLevel].cutout.y1 - 1; i <= LEVELS[currentLevel].cutout.y2 + 1; i++) {
-        for (let o = LEVELS[currentLevel].cutout.x1 - 1; o <= LEVELS[currentLevel].cutout.x2 + 1; o++) {
-            if (i > 0 && i < mapHeight && o > 0 && o < mapWidth && (i < LEVELS[currentLevel].cutout.y1 || i > LEVELS[currentLevel].cutout.y2 || o < LEVELS[currentLevel].cutout.x1 || o > LEVELS[currentLevel].cutout.x2)) {
-                placedCells.push({ x: o, y: i, type: CELLS.IMMOBILE, rotation: 0, id: placedCells.length });
+    if (LEVELS[currentLevel].cutout) {
+        for (let i = LEVELS[currentLevel].cutout.y1 - 1; i <= LEVELS[currentLevel].cutout.y2 + 1; i++) {
+            for (let o = LEVELS[currentLevel].cutout.x1 - 1; o <= LEVELS[currentLevel].cutout.x2 + 1; o++) {
+                if (i > 0 && i < mapHeight && o > 0 && o < mapWidth && (i < LEVELS[currentLevel].cutout.y1 || i > LEVELS[currentLevel].cutout.y2 || o < LEVELS[currentLevel].cutout.x1 || o > LEVELS[currentLevel].cutout.x2)) {
+                    placedCells.push({ x: o, y: i, type: CELLS.IMMOBILE, rotation: 0, id: placedCells.length });
+                }
             }
         }
     }
@@ -442,9 +491,21 @@ function drawMap() {
  */
 function newMap() {
     placedCells = [];
+    savedLayout = [];
+    //Sets the size of the map in cells
+    mapWidth = LEVELS[currentLevel].width;
+    mapHeight = LEVELS[currentLevel].height;
+
+    //Resizes the canvas to fit the map
+    canvas.width = mapWidth * cellSize;
+    canvas.height = mapHeight * cellSize;
+    backgroundCanvas.width = canvas.width;
+    backgroundCanvas.height = canvas.height;
+    draggingCanvas.width = canvas.width;
+    draggingCanvas.height = canvas.height;
     if (LEVELS[currentLevel]) {
         drawBackground();
-        createMap(true);
+        createMap();
     }
 }
 
@@ -563,13 +624,14 @@ function animateStep(timestamp) {
 
 
     if (elapsed <= animationTime) {
-        requestAnimationFrame(function (timestamp) {
+        animation = requestAnimationFrame(function (timestamp) {
             animateStep(timestamp);
         });
     } else {
         animationStart = undefined;
         drawMap();
     }
+
 }
 
 /**
@@ -587,7 +649,7 @@ draggingCanvas.addEventListener('mousedown', function (evt) {
     mouseDown = true;
     let mousePos = getMousePos(evt),
         mapPos = { x: Math.floor(mousePos.x / cellSize), y: Math.floor(mousePos.y / cellSize) };
-    if (mapPos.x >= LEVELS[currentLevel].placeable.x1 && mapPos.y >= LEVELS[currentLevel].placeable.y1 && mapPos.x <= LEVELS[currentLevel].placeable.x2 && mapPos.y <= LEVELS[currentLevel].placeable.y2) {
+    if (!playing && mapPos.x >= LEVELS[currentLevel].placeable.x1 && mapPos.y >= LEVELS[currentLevel].placeable.y1 && mapPos.x <= LEVELS[currentLevel].placeable.x2 && mapPos.y <= LEVELS[currentLevel].placeable.y2) {
         cellHeld = getCell(mapPos.x, mapPos.y);
         if (cellHeld && placedCells[cellHeld] != null && placedCells[cellHeld].type != CELLS.IMMOBILE) {
             cellHeld = deepCopy(placedCells[cellHeld]);
