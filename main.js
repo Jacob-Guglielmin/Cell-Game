@@ -188,6 +188,38 @@ const CELLS = {
             ],
             targets: 8
         },
+        8: {
+            width: 22,
+            height: 14,
+            placeable: {
+                x1: 1,
+                y1: 1,
+                x2: 8,
+                y2: 5
+            },
+            placed: [
+                { x: 1, y: 3, type: CELLS.GENERATOR, rotation: 1 },
+                { x: 3, y: 5, type: CELLS.SLIDE, rotation: 0 },
+                { x: 6, y: 1, type: CELLS.PUSHER, rotation: 1 },
+                { x: 5, y: 4, type: CELLS.PUSHER, rotation: 1 },
+                { x: 5, y: 1, type: CELLS.PUSHER, rotation: 2 },
+                { x: 2, y: 9, type: CELLS.GENERATOR, rotation: 1 },
+                { x: 1, y: 9, type: CELLS.SLIDE, rotation: 0 },
+                { x: 3, y: 9, type: CELLS.SLIDE, rotation: 0 },
+                { x: 1, y: 8, type: CELLS.IMMOBILE, rotation: 0 },
+                { x: 2, y: 8, type: CELLS.IMMOBILE, rotation: 0 },
+                { x: 3, y: 8, type: CELLS.IMMOBILE, rotation: 0 },
+                { x: 12, y: 11, type: CELLS.TARGET, rotation: 0 },
+                { x: 13, y: 11, type: CELLS.TARGET, rotation: 0 },
+                { x: 14, y: 11, type: CELLS.TARGET, rotation: 0 },
+                { x: 15, y: 11, type: CELLS.TARGET, rotation: 0 },
+                { x: 16, y: 11, type: CELLS.TARGET, rotation: 0 },
+                { x: 17, y: 11, type: CELLS.TARGET, rotation: 0 },
+                { x: 18, y: 11, type: CELLS.TARGET, rotation: 0 },
+                { x: 19, y: 11, type: CELLS.TARGET, rotation: 0 },
+            ],
+            targets: 8
+        },
         "testing": {
             width: 15,
             height: 15,
@@ -198,16 +230,8 @@ const CELLS = {
                 y2: 13
             },
             placed: [
-                { x: 1, y: 1, type: CELLS.PASSIVE, rotation: 1 },
-                { x: 9, y: 3, type: CELLS.PUSHER, rotation: 0 },
-                { x: 6, y: 4, type: CELLS.PUSHER, rotation: 1 },
-                { x: 3, y: 6, type: CELLS.SLIDE, rotation: 1 },
-                { x: 5, y: 1, type: CELLS.SLIDE, rotation: 0 },
-                { x: 2, y: 1, type: CELLS.GENERATOR, rotation: 1 },
-                { x: 1, y: 2, type: CELLS.GENERATOR, rotation: 2 },
-                { x: 2, y: 2, type: CELLS.GENERATOR, rotation: 1 },
-                { x: 3, y: 3, type: CELLS.TARGET, rotation: 0 },
-                { x: 4, y: 4, type: CELLS.ROTATOR, rotation: 0 }
+                { x: 3, y: 1, type: CELLS.PUSHER, rotation: 1 },
+                { x: 2, y: 1, type: CELLS.PUSHER, rotation: 1 }
             ],
             targets: 999
         }
@@ -238,6 +262,7 @@ function step() {
                 cell.oldRotation = deepCopy(cell.rotation);
                 cell.oldX = deepCopy(cell.x);
                 cell.oldY = deepCopy(cell.y);
+                cell.hasMoved = false;
             }
         }
         for (let cell of placedCells) {
@@ -281,6 +306,7 @@ function step() {
                                     if (placedCells[cellPushing]) {
                                         placedCells[cellPushing].y += getChange(0, cell.rotation);
                                         placedCells[cellPushing].x += getChange(1, cell.rotation);
+                                        placedCells[cellPushing].hasMoved = true;
                                     }
                                 }
                                 break;
@@ -290,7 +316,7 @@ function step() {
                                 } else {
                                     toPush.push(nextPush);
                                 }
-                            } else if (placedCells[nextPush].type == CELLS.PUSHER || placedCells[nextPush].type == CELLS.GENERATOR) {
+                            } else if (placedCells[nextPush].type == CELLS.PUSHER) {
                                 //If the cell is facing the opposite way, we can't push it
                                 if (placedCells[nextPush].rotation == mod(cell.rotation + 2, 4)) {
                                     if (placedCells[nextPush].type == CELLS.GENERATOR) {
@@ -304,7 +330,7 @@ function step() {
                                         break;
                                     }
                                     //If the cell is a pusher going the same way, we dont need to push it or anything after it
-                                } else if (placedCells[nextPush].type == CELLS.PUSHER && placedCells[nextPush].rotation == cell.rotation) {
+                                } else if (placedCells[nextPush].type == CELLS.PUSHER && placedCells[nextPush].rotation == cell.rotation && placedCells[nextPush].hasMoved) {
                                     moreCells = false;
                                 } else {
                                     toPush.push(nextPush);
@@ -341,9 +367,10 @@ function step() {
                                         if (placedCells[cellPushing]) {
                                             placedCells[cellPushing].y += getChange(0, cell.rotation);
                                             placedCells[cellPushing].x += getChange(1, cell.rotation);
+                                            placedCells[cellPushing].hasMoved = true;
                                         }
                                     }
-                                    placedCells.push({ oldX: cell.x, x: cell.x + getChange(1, cell.rotation), oldY: cell.y, y: cell.y + getChange(0, cell.rotation), type: placedCells[cellDuplicating].type, rotation: placedCells[cellDuplicating].rotation, id: placedCells.length, new: true });
+                                    placedCells.push({ oldX: cell.oldX, x: cell.x + getChange(1, cell.rotation), oldY: cell.oldY, y: cell.y + getChange(0, cell.rotation), type: placedCells[cellDuplicating].type, rotation: placedCells[cellDuplicating].rotation, id: placedCells.length, new: true });
                                     break;
                                 } else if (placedCells[nextPush].type == CELLS.SLIDE) {
                                     if (mod(cell.rotation, 2) == mod(placedCells[nextPush].rotation, 2)) {
@@ -363,7 +390,7 @@ function step() {
                                         } else {
                                             break;
                                         }
-                                    } else if (placedCells[nextPush].type == CELLS.PUSHER && placedCells[nextPush].rotation == cell.rotation) {
+                                    } else if (placedCells[nextPush].type == CELLS.PUSHER && placedCells[nextPush].rotation == cell.rotation && placedCells[nextPush].hasMoved) {
                                         moreCells = false;
                                     } else {
                                         toPush.push(nextPush);
