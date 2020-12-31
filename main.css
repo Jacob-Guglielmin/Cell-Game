@@ -15,8 +15,12 @@ canvas {
     z-index: 1;
 }
 
-#draggingCanvas {
+#buttonCanvas {
     z-index: 2;
+}
+
+#draggingCanvas {
+    z-index: 3;
 }
 
 button {
