@@ -51,7 +51,8 @@ const CELLS = {
     BUTTONS = {
         PLAY: 0,
         PAUSE: 60,
-        RESET: 120
+        RESET: 120,
+        STEP: 180
     },
     LEVELS = {
         1: {
@@ -304,6 +305,10 @@ function init() {
  */
 function step() {
     if (animationStart == undefined) {
+        if (shouldSave) {
+            savedLayout = deepCopy(placedCells);
+            shouldSave = false;
+        }
         for (let cell of placedCells) {
             //Save current state
             if (cell) {
@@ -486,10 +491,6 @@ function step() {
  */
 function playToggle() {
     if (!playing) {
-        if (shouldSave) {
-            savedLayout = deepCopy(placedCells);
-            shouldSave = false;
-        }
         playing = true;
         step();
     } else {
@@ -588,6 +589,8 @@ function newMap() {
     canvasOffsetY = (canvas.height - (mapHeight * cellSize)) / 2;
     canvasOffsetX = (canvas.width - (mapWidth * cellSize)) / 2;
 
+    shouldSave = true;
+
     if (LEVELS[currentLevel]) {
         drawBackground();
         createMap();
@@ -631,10 +634,11 @@ function drawButtons() {
     //Clear the buttons
     clearCanvas(buttonRenderer);
 
-    //Draw the play/pause button
+    //Draw the play/pause button, and step button if paused
     if (playing) {
         buttonRenderer.drawImage(document.getElementById("buttons"), BUTTONS.PAUSE, 0, 60, 60, 0, canvas.height - 60, 60, 60);
     } else {
+        buttonRenderer.drawImage(document.getElementById("buttons"), BUTTONS.STEP, 0, 60, 60, 0, canvas.height - 130, 60, 60);
         buttonRenderer.drawImage(document.getElementById("buttons"), BUTTONS.PLAY, 0, 60, 60, 0, canvas.height - 60, 60, 60);
     }
 
@@ -781,6 +785,8 @@ draggingCanvas.addEventListener('mousedown', function (evt) {
     } else if (mousePos.x + canvasOffsetX >= 70 && mousePos.y + canvasOffsetY >= (canvas.height - 60) && mousePos.x + canvasOffsetX <= 130 && mousePos.y + canvasOffsetY <= canvas.height) {
         //Reset button
         reset();
+    } else if (!playing && mousePos.x + canvasOffsetX >= 0 && mousePos.y + canvasOffsetY >= (canvas.height - 130) && mousePos.x + canvasOffsetX <= 60 && mousePos.y + canvasOffsetY <= (canvas.height - 70)) {
+        step();
     }
 }, false);
 
