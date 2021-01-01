@@ -12,9 +12,11 @@ let canvas = document.getElementById("mainCanvas"),
     cellSize = 30,
 
     placedCells = [],
-    savedLayout = [],
     targetsRemaining = 1,
     currentLevel = 1,
+
+    savedLayout = [],
+    shouldSave = true,
 
     mapWidth,
     mapHeight,
@@ -484,7 +486,10 @@ function step() {
  */
 function playToggle() {
     if (!playing) {
-        savedLayout = deepCopy(placedCells);
+        if (shouldSave) {
+            savedLayout = deepCopy(placedCells);
+            shouldSave = false;
+        }
         playing = true;
         step();
     } else {
@@ -502,6 +507,7 @@ function reset() {
     animationStart = undefined;
     clearTimeout(nextStep);
     playing = false;
+    shouldSave = true;
     drawButtons();
     if (savedLayout[0] !== undefined) {
         placedCells = deepCopy(savedLayout);
