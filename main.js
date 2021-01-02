@@ -297,6 +297,8 @@ function init() {
     draggingCanvas.height = canvas.height;
     buttonCanvas.width = canvas.width;
     buttonCanvas.height = canvas.height;
+    document.getElementById("background").style.width = (canvas.width + 20) + "px";
+    document.getElementById("background").style.height = (canvas.height + 20) + "px";
 
     newMap();
 }
