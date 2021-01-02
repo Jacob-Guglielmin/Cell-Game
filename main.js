@@ -16,7 +16,7 @@ let canvas = document.getElementById("mainCanvas"),
     currentLevel = 1,
 
     savedLayout = [],
-    shouldSave = true,
+    started = false,
 
     mapWidth,
     mapHeight,
@@ -306,9 +306,9 @@ function init() {
  */
 function step() {
     if (animationStart == undefined) {
-        if (shouldSave) {
+        if (!started) {
             savedLayout = deepCopy(placedCells);
-            shouldSave = false;
+            started = true;
         }
         for (let cell of placedCells) {
             //Save current state
@@ -506,7 +506,7 @@ function reset() {
     animationStart = undefined;
     clearTimeout(nextStep);
     playing = false;
-    shouldSave = true;
+    started = false;
     drawButtons();
     if (savedLayout[0] !== undefined) {
         placedCells = deepCopy(savedLayout);
@@ -582,7 +582,7 @@ function newMap() {
     placedCells = [];
     savedLayout = [];
 
-    shouldSave = true;
+    started = false;
 
     if (LEVELS[currentLevel]) {
         //Sets the size of the map in cells
@@ -773,7 +773,7 @@ draggingCanvas.addEventListener('mousedown', function (evt) {
 
     let mapPos = { x: Math.floor(mousePos.x / cellSize), y: Math.floor(mousePos.y / cellSize) };
 
-    if (!playing && mapPos.x >= LEVELS[currentLevel].placeable.x1 && mapPos.y >= LEVELS[currentLevel].placeable.y1 && mapPos.x <= LEVELS[currentLevel].placeable.x2 && mapPos.y <= LEVELS[currentLevel].placeable.y2) {
+    if (!started && mapPos.x >= LEVELS[currentLevel].placeable.x1 && mapPos.y >= LEVELS[currentLevel].placeable.y1 && mapPos.x <= LEVELS[currentLevel].placeable.x2 && mapPos.y <= LEVELS[currentLevel].placeable.y2) {
         //Grab a cell
         cellHeld = getCell(mapPos.x, mapPos.y);
         if (cellHeld && placedCells[cellHeld] != null && placedCells[cellHeld].type != CELLS.IMMOBILE) {
