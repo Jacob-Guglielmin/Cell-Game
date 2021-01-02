@@ -47,12 +47,13 @@ const CELLS = {
     ROTATOR: 120,
     SLIDE: 140,
     TARGET: 160
-    },
+},
     BUTTONS = {
         PLAY: 0,
         PAUSE: 60,
         RESET: 120,
-        STEP: 180
+        STEP: 180,
+        NEXT: 240
     },
     LEVELS = {
         1: {
@@ -472,10 +473,7 @@ function step() {
         });
         //Check if we won
         if (targetsRemaining == 0) {
-            playing = false;
-            alert("You win!");
-            currentLevel++;
-            newMap();
+            drawButtons();
         }
         if (playing) {
             while (animationStart != undefined);
@@ -575,27 +573,32 @@ function drawMap() {
  * Builds the map with the current level
  */
 function newMap() {
-    drawButtons();
+    playing = false;
+    clearTimeout(nextStep);
+    cancelAnimationFrame(animation);
+    animationStart = undefined;
 
     //Removes the cells
     placedCells = [];
     savedLayout = [];
 
-    //Sets the size of the map in cells
-    mapWidth = LEVELS[currentLevel].width;
-    mapHeight = LEVELS[currentLevel].height;
-
-    //Moves the map to the center of the canvas
-    canvasOffsetY = (canvas.height - (mapHeight * cellSize)) / 2;
-    canvasOffsetX = (canvas.width - (mapWidth * cellSize)) / 2;
-
     shouldSave = true;
 
     if (LEVELS[currentLevel]) {
+        //Sets the size of the map in cells
+        mapWidth = LEVELS[currentLevel].width;
+        mapHeight = LEVELS[currentLevel].height;
+
+        //Moves the map to the center of the canvas
+        canvasOffsetY = (canvas.height - (mapHeight * cellSize)) / 2;
+        canvasOffsetX = (canvas.width - (mapWidth * cellSize)) / 2;
         drawBackground();
         createMap();
+        drawButtons();
     } else {
         clearCanvas(backgroundRenderer);
+        clearCanvas(renderer);
+        clearCanvas(buttonRenderer);
     }
 }
 
@@ -644,6 +647,11 @@ function drawButtons() {
 
     //Draw the reset button
     buttonRenderer.drawImage(document.getElementById("buttons"), BUTTONS.RESET, 0, 60, 60, 70, canvas.height - 60, 60, 60);
+
+    //Draw the next button if the level is over
+    if (targetsRemaining == 0) {
+        buttonRenderer.drawImage(document.getElementById("buttons"), BUTTONS.NEXT, 0, 120, 60, canvas.width - 120, canvas.height - 60, 120, 60);
+    }
 }
 
 /**
@@ -786,7 +794,11 @@ draggingCanvas.addEventListener('mousedown', function (evt) {
         //Reset button
         reset();
     } else if (!playing && mousePos.x + canvasOffsetX >= 0 && mousePos.y + canvasOffsetY >= (canvas.height - 130) && mousePos.x + canvasOffsetX <= 60 && mousePos.y + canvasOffsetY <= (canvas.height - 70)) {
+        //Step button
         step();
+    } else if (targetsRemaining == 0 && mousePos.x + canvasOffsetX >= canvas.width - 120 && mousePos.y + canvasOffsetY >= canvas.height - 60 && mousePos.x + canvasOffsetX <= canvas.width && mousePos.y + canvasOffsetY <= canvas.height) {
+        currentLevel++;
+        newMap();
     }
 }, false);
 
